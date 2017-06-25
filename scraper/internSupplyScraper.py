@@ -2,8 +2,16 @@ from urllib.request import urlopen
 from bs4 import BeautifulSoup
 import json
 import re
+import pymongo
 
 class InternSupplyScraper:
+    def __init__(self):
+        self.client = pymongo.MongoClient('mongodb://localhost:27017/')
+        self.db = self.client['jobs']
+        self.jobs = self.db.jobs
+        # import pprint
+        # pprint.pprint(self.jobs.insert_one({ "company": "Google" }))
+        # pprint.pprint(self.jobs.find_one( {"company": "Google"} ))
 
     def getCompanyList(self):
         url = "http://www.intern.supply/"
@@ -22,11 +30,14 @@ class InternSupplyScraper:
                 entry['location'] = locations[1]['title']
             else:
                 entry['location'] = None
-            print(entry)
-        # print(tags[0].h3.text)
-        # iTags = tags[0].find_all('i')
-        # print(iTags[1]['title'])
-
+            entry['application_open'] = None
+            entry['job_link'] = None
+            entry['cover_letter'] = None
+            entry['resume'] = None
+            entry['applied'] = None
+            entry['salry_estimate'] = None
+            if (self.jobs.find_one({ "company": entry['company'] })) is None:
+                self.jobs.insert_one(entry)
 
 scraper = InternSupplyScraper()
 scraper.getCompanyList()
