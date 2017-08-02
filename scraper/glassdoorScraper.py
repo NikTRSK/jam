@@ -6,17 +6,20 @@ import pymongo
 from selenium import webdriver
 from splinter import Browser
 from selenium.webdriver.chrome.options import Options
+from time import sleep
+from db_connector import db_connector
 
 class GlassdoorScraper:
-    def __init__(self):
+    def __init__(self, db):
         self.baseURL = r"https://www.glassdoor.com/index.htm"
         self.searchTerms = ["software engineer new grad", "software developer new grad",
                             "software engineer recent grad", "software developer recent grad"]
         self.cities = ["chicago", "new york", "boston", "seattle", "philadelphia",
-                       "los angeles", "santa monica", "venice, ca", "san francisco",
+                       "los angeles", "santa monica", "venice, ca", "san francisco", "san diego",
                        "mountain view", "palo alto", "menlo park", "san mateo", "daly city", "oakland"]
 
         self.browser = self.init_glasdoor()
+        self.db = db
 
     def init_glasdoor(self):
         chrome_options = Options()
@@ -36,7 +39,6 @@ class GlassdoorScraper:
             break #remove
 
     def searchJob(self, job, city):
-        # browser = self.init_glasdoor()
         browser = self.browser
         browser.visit(self.baseURL)
         searchJobBox = browser.find_by_id("KeywordSearch")
@@ -46,38 +48,57 @@ class GlassdoorScraper:
         searchLocBox.fill(city)
         searchBtn.click()
 
-        jobList = browser.find_by_css("jlGrid hover")
-        print(jobList)
+        navFooter = browser.find_by_id("ResultsFooter")
+        nav = navFooter.find_by_tag('ul')
+        nextBtn = nav.find_by_tag('li')
+        while ("disabled" not in (nextBtn.last.html)):
+            jobList = browser.find_by_id("MainCol")
+            self.getJobData(jobList)
 
-        # import pprint
-        # pprint.pprint(self.jobs.insert_one({ "company": "Google" }))
-        # pprint.pprint(self.jobs.find_one( {"company": "Google"} ))
+            navFooter = browser.find_by_id("ResultsFooter")
+            nav = navFooter.find_by_tag('ul')
+            nextBtn = nav.find_by_tag('li')
 
-    # def getCompanyList(self):
-    #     url = "http://www.intern.supply/"
-    #     webpage = urlopen(url)
-    #     html = BeautifulSoup(webpage.read(), "lxml")
-    #     allCompanies = html.find_all('article')
-    #     # print(allCompanies)
-    #     companyList = self.parseAllTags(allCompanies[1:])
-    #
-    # def parseAllTags(self, companies):
-    #     for company in companies:
-    #         entry = {}
-    #         entry['company'] = company.h3.text
-    #         locations = (company.find_all('i'))
-    #         if len(locations) > 1:
-    #             entry['location'] = locations[1]['title']
-    #         else:
-    #             entry['location'] = None
-    #         entry['application_open'] = None
-    #         entry['job_link'] = None
-    #         entry['cover_letter'] = None
-    #         entry['resume'] = None
-    #         entry['applied'] = None
-    #         entry['salry_estimate'] = None
-    #         if (self.jobs.find_one({ "company": entry['company'] })) is None:
-    #             self.jobs.insert_one(entry)
+            nextBtn.last.click()
+            closeBtn = browser.find_by_css(".mfp-close")
+            try:
+                closeBtn.click()
+            except AttributeError:
+                print ("No close button on this page")
+            # Re attach the the next button
+            navFooter = browser.find_by_id("ResultsFooter")
+            nav = navFooter.find_by_tag('ul')
+            nextBtn = nav.find_by_tag('li')
 
-scraper = GlassdoorScraper()
-scraper.searchJobs()
+    def getJobData(self, jobList):
+        for jl in jobList:
+            for l in jl.find_by_tag('li'):
+                data = (l.text)
+                if len(data) > 1:
+                    soup = BeautifulSoup(l.html, "lxml")
+                    company_city = soup.find('div', {"class": "empLoc"})
+                    sleep(0.1)
+                    if company_city is not None:
+                        company_city = company_city.text.encode("utf-8").split(b"\xe2\x80\x93")
+                        if len(company_city) is 2:
+                            company = company_city[0].strip(b' ')
+                            city = company_city[1].strip(b' ')
+
+                            est_salary = soup.find('span', {"class": "green"})
+                            salary = ''
+                            if (est_salary) is not None:
+                                salary = est_salary.text.encode("utf-8")
+                            # Get job posting link
+                            links = l.find_by_tag('a')
+                            job_link = links['href']
+                            item = {
+                                "company": str(company),
+                                "city": [str(city)],
+                                "salary": str(salary),
+                                "job_link": [str(job_link)]
+                            }
+                            self.db.update_company_location_if_exists(item)
+                            # print(str(company) + " | " + str(city) + " | " + str(salary) + " | job: " + str(job_link) + "\n")
+
+# scraper = GlassdoorScraper()
+# scraper.searchJobs()

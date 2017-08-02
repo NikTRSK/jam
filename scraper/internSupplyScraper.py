@@ -9,9 +9,6 @@ class InternSupplyScraper:
         self.client = pymongo.MongoClient('mongodb://localhost:27017/')
         self.db = self.client['jobs']
         self.jobs = self.db.jobs
-        # import pprint
-        # pprint.pprint(self.jobs.insert_one({ "company": "Google" }))
-        # pprint.pprint(self.jobs.find_one( {"company": "Google"} ))
 
     def getCompanyList(self):
         url = "http://www.intern.supply/"
